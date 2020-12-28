@@ -5,47 +5,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
-    <script src="../node_modules/vue/dist/vue.js"></script>
-
+    <script src="./utils.js"></script>
+    <style>
+        span {
+            font-size: 40px;
+            margin: 5px;
+        }
+    </style>
 </head>
 
 <body>
     <button class="add">change vnodes</button>
-    <div id="app"></div>
     <script>
 
-        // TODO: 构造不同的vnode
-        var oldCh 
-        var newCh
-
-        function deepCopy(source) {
-            var target;
-            if (Array.isArray(source)) {
-                target = [];
-            } else if (source && typeof source === 'object') {
-                target = {};
-            } {
-                return source;
+        class Vnode {
+            constructor(opt) {
+                this.tag = opt.tag;
+                this.text = opt.text;
+                this.key = opt.key;
+                this.children = opt.children || [];
             }
-
-            for (const key in source) {
-                target[key] = deepCopy(source[key])
-
-            }
-            return target;
         }
+
+        // 随便构造一个vnode
+        function createVnode(parentNode = {
+            tag: 'div',
+            children: [],
+        }, len = 3) {
+            for (let i = 0; i < len; i++) {
+                const vnode = new Vnode({
+                    tag: 'span',
+                    key: i + 1,
+                    children: [
+                        new Vnode({
+                            text: i + 1
+                        })
+                    ]
+                });
+                parentNode.children.push(vnode);
+            }
+            return parentNode;
+        }
+
+        var oldVnode = createVnode();
+        var newVnode = deepCopy(oldVnode);
 
         function createChildren(vnode, parentNode, refElm) {
             var tag = vnode.tag;
             var textContent = vnode.text;
-            // 文本直接直接新增文本
             var ele;
-            if (textContent !== undefined) {
+            if (textContent !== undefined) { // 文本直接直接新增文本
                 var ele = document.createTextNode(textContent);
                 vnode.elm = ele;
             } else {
                 var ele = document.createElement(tag);
-                vnode.elm = vnode.elm || ele;
+                vnode.elm = vnode.elm || ele; // 加上elm属性，指向当前HTMLElement
                 for (const child of vnode.children) {
                     createChildren(child, ele, null);
                 }
@@ -56,10 +70,55 @@
                 parentNode.appendChild(ele);
             }
         }
-        createChildren(oldCh, document.body);
+
+        createChildren(oldVnode, document.body);
 
 
-        var button = document.querySelector('button');
+        const button = document.querySelector('button');
+
+        button.addEventListener('click', () => {
+            addChildren(newVnode);
+            randomSort(newVnode.children);
+            console.log('oldVnode', oldVnode)
+            console.log('newVnode', newVnode)
+            patchVnode(oldVnode, newVnode);
+            oldVnode = deepCopy(newVnode);
+        });
+
+        function addChildren(vnode, len = 2) {
+            for (let i = 0; i < len; i++) {
+                vnode.children.push(
+                    deepCopy(new Vnode({
+                        tag: 'span',
+                        key: vnode.children.length + 1,
+                        children: [
+                            new Vnode({
+                                text: vnode.children.length + 1,
+                            })
+                        ]
+                    }))
+                )
+            }
+        }
+
+        function deepCopy(source) {
+            if (source instanceof Vnode) {
+                console
+            }
+            var target;
+            if (Array.isArray(source)) {
+                target = [];
+            }else if (Object.prototype.toString.call(source) === '[object Object]') {
+                target = {};
+            } else {
+                return source;
+            }
+            for (const key in source) {
+                target[key] = deepCopy(source[key])
+            }
+
+            return target;
+        }
 
         // 随机打乱一个数组
         function randomSort(arr) {
@@ -78,6 +137,7 @@
                 a.isComment === b.isComment
             )
         }
+
         var isUndef = v => v === undefined;
 
         // 在patchVnode的过程中随时可能会操作dom， 比如替换textContent,移动交换元素位置，新增、删除元素
