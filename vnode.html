@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="../node_modules/vue/dist/vue.js"></script>
+
+</head>
+
+<body>
+    <button class="add">change vnodes</button>
+    <div id="app"></div>
+    <script>
+
+        // TODO: 构造不同的vnode
+        var oldCh 
+        var newCh
+
+        function deepCopy(source) {
+            var target;
+            if (Array.isArray(source)) {
+                target = [];
+            } else if (source && typeof source === 'object') {
+                target = {};
+            } {
+                return source;
+            }
+
+            for (const key in source) {
+                target[key] = deepCopy(source[key])
+
+            }
+            return target;
+        }
+
+        function createChildren(vnode, parentNode, refElm) {
+            var tag = vnode.tag;
+            var textContent = vnode.text;
+            // 文本直接直接新增文本
+            var ele;
+            if (textContent !== undefined) {
+                var ele = document.createTextNode(textContent);
+                vnode.elm = ele;
+            } else {
+                var ele = document.createElement(tag);
+                vnode.elm = vnode.elm || ele;
+                for (const child of vnode.children) {
+                    createChildren(child, ele, null);
+                }
+            }
+            if (refElm) {
+                parentNode.insertBefore(ele, refElm)
+            } else {
+                parentNode.appendChild(ele);
+            }
+        }
+        createChildren(oldCh, document.body);
+
+
+        var button = document.querySelector('button');
+
+        // 随机打乱一个数组
+        function randomSort(arr) {
+            for (var i = 0; i < arr.length; i++) {
+                var n = Math.floor((Math.random() * arr.length));
+                var slice = arr.splice(n, 1)[0];
+                arr.push(slice);
+            }
+        }
+
+
+        function sameVnode(a, b) {
+            return (
+                a.key === b.key &&
+                a.tag === b.tag &&
+                a.isComment === b.isComment
+            )
+        }
+        var isUndef = v => v === undefined;
+
+        // 在patchVnode的过程中随时可能会操作dom， 比如替换textContent,移动交换元素位置，新增、删除元素
+        function patchVnode(oldVnode, vnode) {
+            var elm = oldVnode.elm;
+            vnode.elm = elm;
+            var oldCh = oldVnode.children;
+            var ch = vnode.children;
+            if (vnode.text === undefined) {
+                if (oldCh && ch) {
+                    updateChildren(elm, oldCh, ch)
+                } else if (ch) { // 新增整个子节点
+                    addVnodes(elm, null, ch, 0, ch.length - 1);
+                } else if (oldCh) {
+                    // removeVnode()
+                } else if (oldVnode.text) {
+                    elm.textContent = '' // 移除文本内容
+                }
+            } else if (oldVnode.text !== vnode.text) {
+                elm.textContent = vnode.text; //  替换文本内容
+            }
+        }
+
+
+
+        function updateChildren(elm, oldCh, newCh) {
+            var oldStartIdx = 0;
+            var newStartIdx = 0;
+            var oldEndIdx = oldCh.length - 1;
+            var oldStartVnode = oldCh[0];
+            var oldEndVnode = oldCh[oldEndIdx];
+            var newEndIdx = newCh.length - 1;
+            var newStartVnode = newCh[0];
+            var newEndVnode = newCh[newEndIdx];
+            var oldKeyToIdx, idxInOld, vnodeToMove, refElm;
+            // 以两边向中间包围的形式 来进行遍历
+            // 头部的子节点比较完毕，startIdx 就加1
+            // 尾部的子节点比较完毕，endIdx 就减1
+            // 只要其中一个数组遍历完（startIdx<endIdx），则结束遍历
+            while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+                if (isUndef(oldStartVnode)) {
+                    oldStartVnode = oldCh[++oldStartIdx]; // Vnode has been moved left
+                } else if (isUndef(oldEndVnode)) {
+                    oldEndVnode = oldCh[--oldEndIdx];
+                } else if (sameVnode(oldStartVnode, newStartVnode)) { // 新头等于旧头
+                    patchVnode(oldStartVnode, newStartVnode);
+                    oldStartVnode = oldCh[++oldStartIdx] // 挪到下一个节点比较，旧头索引+1
+                    newStartVnode = newCh[++newStartIdx];
+                } else if (sameVnode(oldEndVnode, newEndVnode)) { // 旧尾等于新尾
+                    patchVnode(oldEndVnode, newEndVnode);
+                    oldEndVnode = oldCh[--oldEndIdx];
+                    newEndVnode = newCh[--newEndIdx];
+                } else if (sameVnode(oldStartVnode, newEndVnode)) { // 旧头等于新尾 向右移动节点
+                    patchVnode(oldStartVnode, newEndVnode);
+                    // TODO: 移动旧头到旧尾后面
+                    try {
+                        elm.insertBefore(oldStartVnode.elm, oldEndVnode.elm.nextSibling);
+
+                    } catch (error) {
+                        console.log(error)
+                    }
+                    oldStartVnode = oldCh[++oldStartIdx]; // 旧头索引+1
+                    newEndVnode = newCh[--newEndIdx]; // 新尾索引+1
+                } else if (sameVnode(oldEndVnode, newStartVnode)) { // 旧尾等于新头，向左移动到头部
+                    patchVnode(oldEndVnode, newStartVnode);
+                    // 旧头移动到旧尾前面
+                    elm.insertBefore(oldEndVnode.elm, oldStartVnode.elm)
+                    oldEndVnode = oldCh[--oldEndIdx];  // 旧尾索引+1
+                    newStartVnode = newCh[++newStartIdx]; // 新头索引+1
+                } else {
+                    // 对比key
+                    if (isUndef(oldKeyToIdx)) {
+                        oldKeyToIdx = createKeyToOldIdx(oldCh, oldStartIdx, oldEndIdx);
+                    }
+                    idxInOld = oldKeyToIdx[newStartVnode.key];
+                    if (isUndef(idxInOld)) { // 新增元素
+                        createElm(elm, oldStartVnode.elm, newStartVnode);
+                    } else { // 移动元素
+                        const vnodeToMove = oldCh[idxInOld];
+                        if (sameVnode(vnodeToMove, newStartVnode)) {
+                            patchVnode(vnodeToMove, newStartVnode);
+                            oldCh[idxInOld] = undefined;
+                            try {
+                                elm.insertBefore(vnodeToMove.elm, oldStartVnode.elm);
+
+                            } catch (error) {
+                                console.log(error)
+                            }
+                        } else {
+                            createElm(elm, oldStartVnode.elm, newStartVnode);
+                        }
+                    }
+                    // 
+                    newStartVnode = newCh[++newStartIdx];
+                }
+            }
+            if (oldStartIdx > oldEndIdx) {
+                // 旧子节点遍历完毕，新子节点可能有剩, 新增剩余子节点
+                // 新增有个问题是新增到哪里，是直接追加到父节点，还是插入到某个位置, 通过refElm作为位置判断
+                // 如果是null，则直接把剩余子节点appendChild到父节点
+                // 如果不是，说明新尾被比较过，那么则作为兄弟元素插入到当前新尾的前面
+                refElm = isUndef(newCh[newStartIdx + 1]) ? null : newCh[newStartIdx + 1].elm;
+                addVnodes(elm, refElm, newCh, newStartIdx, newEndIdx)
+            } else if (newStartIdx > newEndIdx) { //新子节点遍历完毕，旧子节点可能还有剩， 删除剩余旧节点
+                // removeVnode
+            }
+        }
+
+        function createKeyToOldIdx(children, beginIdx, endIdx) {
+            var i, key;
+            var map = {};
+            for (i = beginIdx; i <= endIdx; ++i) {
+                key = children[i].key;
+                if (key) { map[key] = i; }
+            }
+            return map
+        }
+
+        function createElm(parentElm, refElm, newStartVnode) {
+            var elm;
+            if (newStartVnode.text) {
+                elm = document.createTextNode(newStartVnode.text)
+                parentElm.insertBefore(elm, refElm)
+            } else {
+                createChildren(newStartVnode, parentElm, refElm)
+            }
+        }
+
+        function addVnodes(parentElm, refElm, newCh, newStartIdx, newEndIdx) {
+            for (var i = newStartIdx; i <= newEndIdx; i++) {
+                var vnode = newCh[newStartIdx];
+                createChildren(vnode, parentElm, refElm);
+            }
+        }
+    </script>
+</body>
+
+</html>
